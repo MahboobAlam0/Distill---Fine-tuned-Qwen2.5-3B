@@ -93,10 +93,13 @@ class TestText2SQLModel:
         mock_tok = MagicMock()
         mock_tok.eos_token     = "<eos>"
         mock_tok.eos_token_id  = 0
-        mock_tok.return_value  = {
+        # A real tokenizer returns a BatchEncoding, which has .to(device);
+        # a plain dict does not, so the mock returns one too.
+        from transformers import BatchEncoding
+        mock_tok.return_value  = BatchEncoding({
             "input_ids":      torch.zeros((1, 10), dtype=torch.long),
             "attention_mask": torch.ones((1, 10), dtype=torch.long),
-        }
+        })
         mock_tok.decode.return_value = "SELECT name FROM employees WHERE salary > 50000;"
         mock_tok_cls.from_pretrained.return_value = mock_tok
 
