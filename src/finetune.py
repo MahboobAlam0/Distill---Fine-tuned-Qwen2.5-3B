@@ -1,6 +1,11 @@
 """
 src/finetune.py
 ---------------
+LEGACY: this is the first experiment (Llama-3.2-3B on Spider) and is kept
+for reference only. The published Distill model (Qwen2.5-3B-Instruct on
+sql-create-context, adapter in checkpoints/final_v2) was trained with
+kaggle/train_notebook.ipynb; see "Reproducibility notes" in the README.
+
 QLoRA fine-tuning of Llama-3.2-3B on Spider Text-to-SQL.
 
 Hardware : Free Kaggle GPU (2x T4, 30GB) or Colab A100 (40GB)

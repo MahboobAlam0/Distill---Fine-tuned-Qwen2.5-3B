@@ -40,7 +40,7 @@ The answer: **13× improvement in exact-match accuracy**, a 114 MB adapter inste
 
 ### Why these numbers matter
 
-Exact match is strict — column order, aliases, whitespace all count. A query that returns the correct answer via a different formulation scores zero. **55% execution accuracy** tells the honest story: Distill generates semantically correct SQL more than half the time at just 3B parameters, with no retrieval augmentation and no chain-of-thought prompting.
+Exact match is strict — column order, aliases, whitespace all count. A query that returns the correct answer via a different formulation scores zero. **55% execution accuracy** shows that many "misses" are equivalent queries written differently. One caveat: execution accuracy here runs both queries on an in-memory SQLite database built from the `CREATE TABLE` schema **with no rows** (see `exec_sql` in `src/evaluate.py`), so two different `SELECT`s that both return nothing count as a match. It checks that the query is valid against the schema and structurally compatible, and it overstates true semantic accuracy. Measuring that properly needs tables filled with data (not done yet).
 
 ---
 
@@ -57,7 +57,7 @@ Exact match is strict — column order, aliases, whitespace all count. A query t
   │         4-bit NF4 quantized weights           │
   │                                               │
   │  ┌─────────────────────────────────────────┐  │
-  │  │ LoRA Adapters (trainable, ~21M params)  │  │
+  │  │ LoRA Adapters (trainable, 29.9M params) │  │
   │  │  Attention : q, k, v, o projections     │  │
   │  │  MLP       : gate, up, down projections │  │
   │  └─────────────────────────────────────────┘  │
@@ -80,7 +80,7 @@ Exact match is strict — column order, aliases, whitespace all count. A query t
 Qwen2.5-3B-Instruct outperforms Llama-3.2-3B on coding and structured generation benchmarks at the same parameter count. For SQL — where output must be syntactically valid — the stronger instruction-following baseline mattered more than familiarity.
 
 **Why QLoRA over full fine-tuning?**
-Full fine-tuning a 3B model demands ~24 GB VRAM and hours of A100 time. QLoRA — 4-bit NF4 quantization of frozen weights + small trainable LoRA adapters — fits the same model into 6 GB on a free T4. The accuracy tradeoff is minimal because SQL generation is a low-rank adaptation: the base model already knows grammar; the adapter learns domain patterns.
+Full fine-tuning a 3B model in mixed precision needs about 49 GB of GPU memory for the weights, their gradients and Adam's optimizer states (16 bytes per parameter; about 25 GB even with the leanest 8 bytes per parameter accounting), before activations. QLoRA — 4-bit NF4 quantization of frozen weights + small trainable LoRA adapters — shrinks the frozen weights from about 6 GB in fp16 to about 1.8 GB, so the model, the adapters and the training activations fit on a free 15 GB T4. The accuracy tradeoff is minimal because SQL generation is a low-rank adaptation: the base model already knows grammar; the adapter learns domain patterns.
 
 **Why LoRA rank r=16?**
 r=8 underfit on initial runs; r=32 showed no improvement but doubled adapter memory. r=16 with α=32 (scaling ratio = 2) hit the sweet spot — sufficient capacity to learn SQL structure without overfitting the 28K training set.
@@ -105,6 +105,13 @@ Validation loss diverged from training loss after step 200 (epoch 0.46). Without
 | Optimizer | Paged AdamW 8-bit | Handles backward-pass memory spikes without OOM |
 | Quantization | 4-bit NF4 + double quantization | NF4 preserves more signal than int4 for normally-distributed weights |
 | Platform | Kaggle T4 × 1 (free) | ~15 GB VRAM, zero cost |
+
+### Reproducibility notes
+
+- **Training-set size.** `data/prepare_dataset.py` samples **28,000** training examples from the 90% split, and the numbers in this README describe that setup. The Kaggle notebook as committed (`kaggle/train_notebook.ipynb`) writes the **full 90% split** (about 70k examples) instead. To reproduce the reported run, use the 28,000-example files from `data/prepare_dataset.py`.
+- **GPU count.** The notebook's header suggests enabling "GPU T4 x2" and loads the model with `device_map='auto'`, while the run reported here used one T4. The notebook has no saved outputs, so this can't be confirmed from the repo.
+- **Precision.** On a T4 (no bf16 support) the notebook trains in fp16, with fp16 as the 4-bit compute dtype.
+- **`src/finetune.py` is the earlier script** from the first Llama-3.2-3B / Spider experiment and is kept for reference only. The reported model was trained with the Kaggle notebook.
 
 ### Loss Curve
 
@@ -149,7 +156,7 @@ Execution Accuracy
   Note: empty tables; meaningful for structural correctness only.
 ```
 
-The **24 pp gap between EM (30.67%) and execution accuracy (55.03%)** is the key insight: Distill regularly generates SQL that returns the right answer through a different-but-equivalent formulation. Exact match penalises this; execution accuracy doesn't.
+The **24 pp gap between EM (30.67%) and execution accuracy (55.03%)** suggests Distill often writes a different-but-equivalent formulation, which exact match penalises. Because the tables are empty, part of that gap can also be queries that merely return the same empty result, so treat 55.03% as an upper bound on semantic accuracy.
 
 ---
 
@@ -159,7 +166,7 @@ The **24 pp gap between EM (30.67%) and execution accuracy (55.03%)** is the key
 distill/
 │
 ├── src/
-│   ├── finetune.py          # QLoRA training — LoRA config, data pipeline, Trainer
+│   ├── finetune.py          # Legacy QLoRA script (first Llama-3.2-3B / Spider experiment); the reported run used kaggle/train_notebook.ipynb
 │   ├── evaluate.py          # EM + BLEU + Execution Accuracy + baseline comparison
 │   └── inference.py         # Model wrapper with lazy loading (used by API and UI)
 │

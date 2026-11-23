@@ -49,17 +49,18 @@ class TestExecSQL:
         assert result is None
 
     def test_create_and_query(self):
-        # Use temp file DB to test real DDL
-        import sqlite3, tempfile, os
-        db = tempfile.mktemp(suffix=".db")
-        conn = sqlite3.connect(db)
-        conn.execute("CREATE TABLE t (id INT, val TEXT)")
-        conn.execute("INSERT INTO t VALUES (1, 'a'), (2, 'b')")
-        conn.commit()
-        conn.close()
-        result = exec_sql("SELECT * FROM t ORDER BY id", db_path=db)
+        # exec_sql builds an in-memory database from the schema script,
+        # the same way the evaluation harness uses it.
+        schema = "CREATE TABLE t (id INT, val TEXT); INSERT INTO t VALUES (1, 'a'), (2, 'b');"
+        result = exec_sql("SELECT * FROM t ORDER BY id", schema=schema)
         assert result == [(1, "a"), (2, "b")]
-        os.remove(db)
+
+    def test_schema_only_tables_are_empty(self):
+        # Evaluation passes only CREATE TABLE statements, so every query
+        # returns no rows; execution accuracy can't tell many queries apart.
+        schema = "CREATE TABLE t (id INT, val TEXT);"
+        assert exec_sql("SELECT * FROM t", schema=schema) == []
+        assert exec_sql("SELECT val FROM t WHERE id = 1", schema=schema) == []
 
 
 # ── Text2SQLModel ─────────────────────────────────────────────

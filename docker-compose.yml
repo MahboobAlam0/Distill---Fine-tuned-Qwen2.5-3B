@@ -8,8 +8,8 @@ services:
     volumes:
       - ./checkpoints:/app/checkpoints
     environment:
-      - BASE_MODEL=meta-llama/Llama-3.2-3B-Instruct
-      - ADAPTER_PATH=checkpoints/final
+      - BASE_MODEL=Qwen/Qwen2.5-3B-Instruct
+      - ADAPTER_PATH=checkpoints/final_v2
     restart: unless-stopped
 
   streamlit:
@@ -20,8 +20,8 @@ services:
     volumes:
       - ./checkpoints:/app/checkpoints
     environment:
-      - BASE_MODEL=meta-llama/Llama-3.2-3B-Instruct
-      - ADAPTER_PATH=checkpoints/final
+      - BASE_MODEL=Qwen/Qwen2.5-3B-Instruct
+      - ADAPTER_PATH=checkpoints/final_v2
     depends_on:
       - api
     restart: unless-stopped
